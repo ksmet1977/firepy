@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import copy 
 
+__all__ = ['fire_calculator']
+
 def fire_calculator_(prefire_salary = 40000, prefire_salary_increase = 1, 
                     prefire_extra_income = 0,
                     prefire_expenses = 16000, 

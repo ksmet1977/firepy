@@ -7,7 +7,7 @@ Created on Wed Feb  9 11:32:27 2022
 
 @author: KSmet
 """
-from fire_calculator import fire_calculator
+from firepy import fire_calculator
 import numpy as np
 import matplotlib.pyplot as plt
 
