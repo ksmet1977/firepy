@@ -781,7 +781,7 @@ if __name__ == '__main__':
     if run_fire_calculator:
         with_real_estate = 1
         age = 45 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
-        f_age = 50
+        f_age = 49
         u_age = None
         swr = 3.5
         rebalance = True
@@ -813,8 +813,8 @@ if __name__ == '__main__':
         pf_extra_income = 0
         pf_extra_income_increase = 1
         
-        f_capital = -450000 * with_real_estate
-        f_real_estate = 550000 * with_real_estate
+        f_capital = -200000 * with_real_estate
+        f_real_estate = 200000 * with_real_estate
         f_real_estate_returns = 1
         f_real_estate_tax = 0
         f_extra_income = 4500 * with_real_estate
