@@ -253,10 +253,13 @@ self.total_without_real_estate, self.total_with_real_estate)
         self.total_without_real_estate *= scale
         self.total_with_real_estate *= scale
         
-    def get_scaled(self, scale = 1):
-
+    def get_scaled(self, scale = 1, capital_only = True):
+        real_estate = self.reaL_estate if capital_only else self.real_estate*scale
+            
+        capital = self.capital*scale 
+        
         return Portfolio(year = self.year, capital = self.capital*scale,
-                         capital_allocation = self.capital_allocation, real_estate = self.real_estate,
+                         capital_allocation = self.capital_allocation, real_estate = real_estate,
                          capital_returns = self.capital_returns, capital_tax = self.capital_tax,
                          real_estate_returns = self.real_estate_returns, real_estate_tax = self.real_estate_tax)
 
@@ -391,8 +394,8 @@ def _get_portfolio_for_year(year = 0, inflation = 3.5,
                           access_usufruct = False,
                           rebalance = True):
     
-    capital_year = capital if (((year == 0) & (portfolio is None))  | access_usufruct) else 0 # only on startup (or when usufruct is accessed) is capital (pre-existing) not bought   
-    real_estate_year = real_estate if (((year == 0) & (portfolio is None)) | access_usufruct) else 0 # only on startup (or when usufruct is accessed) is real_estate (pre-existing) not bought   
+    capital_year = capital #if (((year == 0) & (portfolio is None))  | access_usufruct) else 0 # only on startup (or when usufruct is accessed) is capital (pre-existing) not bought   
+    real_estate_year = real_estate #if (((year == 0) & (portfolio is None)) | access_usufruct) else 0 # only on startup (or when usufruct is accessed) is real_estate (pre-existing) not bought   
 
     # calulate (capital) investment for year (>0):
     money_in =  salary*(1 + salary_increase/100)**year + extra_income*(1 + extra_income_increase/100)**year  
@@ -426,7 +429,7 @@ def _get_portfolio_for_year(year = 0, inflation = 3.5,
                             capital_allocation = capital_allocation, 
                             rebalance = rebalance)  
     
-    
+    #print(age+year,money_in, money_out,balance,buy,prtfl.total_without_real_estate)
     
     # Quick check to see if real estate needs to be sold, sell if necessary:
     if (buy == False) & (prtfl.total_without_real_estate - balance < 0):
@@ -436,8 +439,10 @@ def _get_portfolio_for_year(year = 0, inflation = 3.5,
             real_estate_sell_value = real_estate*(1-real_estate_tax/100) # sell this one first
             real_estate = 0
         balance = balance + real_estate_sell_value # add to balance
+        buy = balance > 0 
         prtfl.sell(capital = 0, real_estate = real_estate_sell_value) # sell real_estate
-        
+    else:
+        real_estate = 0 # already in year portfolio prtfl !!!
 
     # Buy or sell investements at end of year:
     if buy:   
@@ -603,12 +608,15 @@ def fire_calculator(age,
                                               real_estate_tax = pf_real_estate_tax,
                                               access_usufruct = False,
                                               rebalance = rebalance)
+              pf_real_estate = 0 # buy real_estate only once !
+              pf_capital = 0
               if age + year == u_age:
                   prtfl = prtfl + f_prtfl_u(year, inflation)
                   
         # fire period:
         if (age + year >= f_age) & (age + year < r_age):
               inflation = f_inflation
+              # print(age+year, f_real_estate,f_capital)
               prtfl = _get_portfolio_for_year(year = year,
                                               inflation = inflation,
                                               salary = f_salary, 
@@ -628,6 +636,8 @@ def fire_calculator(age,
                                               real_estate_tax = f_real_estate_tax,
                                               access_usufruct = False,
                                               rebalance = rebalance)
+              f_real_estate = 0 # buy real_estate only once !
+              f_capital = 0
               if age + year == u_age:
                   prtfl = prtfl + f_prtfl_u(year, inflation)
                   
@@ -653,11 +663,13 @@ def fire_calculator(age,
                                               real_estate_tax = r_real_estate_tax,
                                               access_usufruct = False,
                                               rebalance = rebalance)
+              r_real_estate = 0 # buy real_estate only once !
+              r_capital = 0
               if age + year == u_age:
                   prtfl = prtfl + f_prtfl_u(year, inflation)
                   
         if inflation_adjusted_vals: 
-            prtfl_inflation_adjusted = prtfl.get_scaled(scale = (1/((1+inflation/100)**year))) 
+            prtfl_inflation_adjusted = prtfl.get_scaled(scale = (1/((1+inflation/100)**year)), capital_only=False) 
             prtfls.append(prtfl_inflation_adjusted)
         else:
             prtfls.append(prtfl)
@@ -726,29 +738,50 @@ if __name__ == '__main__':
     run_fire_calculator = True 
     
     if run_fire_calculator_:
-        fire_age = 47 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
+        fire_age = 48 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
         retirement_income_net = (1610)*12
         capital_allocation = [60,30,10,0] # stocks, bonds, cash, etf
         capital_returns = [5,1,0,5]
         capital_extra_age = None
         inflation = [2,4,6]
+        
+        pf_capital = 485000
+        pf_real_estate = 0
+        pf_real_estate_returns = 1
+        pf_extra_income = 0
+        pf_extra_income_increase = 1
+        f_extra_income = pf_extra_income
+        f_extra_income_increase = pf_extra_income_increase
+        r_extra_income = pf_extra_income
+        r_extra_income_increase = pf_extra_income_increase
+        
+        
         fig, ax = plt.subplots(1,len(inflation), figsize=(19,5))
         
         for i, inflation_i in enumerate(inflation):
             print('\ninflation = {:1.0f}%:'.format(inflation_i))
             ax[i].set_title('Inflation = {:1.0f}%:'.format(inflation_i))
             portfolio0 = fire_calculator_(fire_age = fire_age, 
+                                          pf_capital = pf_capital,
                                          retirement_income_net = retirement_income_net,
-                                        capital_allocation = capital_allocation,
-                                        capital_returns = capital_returns,
-                                        capital_extra_age = capital_extra_age,
-                                        inflation = inflation_i, ax = ax[i])
+                                         capital_allocation = capital_allocation,
+                                         capital_returns = capital_returns,
+                                         capital_extra_age = capital_extra_age,
+                                         inflation = inflation_i, ax = ax[i], 
+                                        
+                                        pf_real_estate = pf_real_estate,
+                                        pf_real_estate_returns = pf_real_estate_returns,
+                                        f_extra_income = pf_extra_income,
+                                        f_extra_income_increase = pf_extra_income_increase,
+                                        r_extra_income = pf_extra_income,
+                                        r_extra_income_increase = pf_extra_income_increase)
         
         
         
     if run_fire_calculator:
+        with_real_estate = 1
         age = 45 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
-        f_age = 48
+        f_age = 50
         u_age = None
         swr = 3.5
         rebalance = True
@@ -757,12 +790,37 @@ if __name__ == '__main__':
         pf_salary = 40000
         pf_salary_increase = 1
         pf_expenses = 16000
-        pf_capital = 450000
+        pf_capital = 485000 
         pf_real_estate = 0
         f_expenses = 20000
         r_salary = (1610+170)*12 # + 170 for study years
         r_salary_increase = None
         r_expenses = 20000
+        
+        # pf_real_estate = 550000 * with_real_estate
+        # pf_real_estate_returns = 1
+        # pf_real_estate_tax = 0
+        # pf_extra_income = 3500 * with_real_estate
+        # pf_extra_income_increase = 1
+        # f_extra_income = pf_extra_income
+        # f_extra_income_increase = pf_extra_income_increase
+        # r_extra_income = pf_extra_income
+        # r_extra_income_increase = pf_extra_income_increase
+        
+        pf_real_estate = 0
+        pf_real_estate_returns = 1
+        pf_real_estate_tax = 0
+        pf_extra_income = 0
+        pf_extra_income_increase = 1
+        
+        f_capital = -450000 * with_real_estate
+        f_real_estate = 550000 * with_real_estate
+        f_real_estate_returns = 1
+        f_real_estate_tax = 0
+        f_extra_income = 4500 * with_real_estate
+        f_extra_income_increase = 1
+        r_extra_income = f_extra_income
+        r_extra_income_increase = f_extra_income_increase
         
         fig, ax = plt.subplots(1,len(pf_inflation), sharex = True, sharey = True, 
                                figsize = (19,5))
@@ -792,24 +850,26 @@ if __name__ == '__main__':
                               pf_capital_returns = [5,1,0,5,0],
                               pf_capital_tax = [0.35, 0.12, 0, 1.32 + 0.22, 0],
                               pf_real_estate = pf_real_estate, 
-                              pf_real_estate_returns = 0, 
-                              pf_real_estate_tax = 0,
+                              pf_real_estate_returns = pf_real_estate_returns, 
+                              pf_real_estate_tax = pf_real_estate_tax,
                               
                               f_inflation = None,
                               f_salary = 0, f_salary_increase = 0, 
-                              f_extra_income = 0, f_extra_income_increase = 0,
+                              f_extra_income = f_extra_income, 
+                              f_extra_income_increase = f_extra_income_increase,
                               f_expenses = f_expenses, f_expenses_increase = 0,  
-                              f_capital = 0, 
+                              f_capital = f_capital, 
                               f_capital_allocation = None, 
                               f_capital_returns = None,
                               f_capital_tax = None,
-                              f_real_estate = 0, 
-                              f_real_estate_returns = None, 
-                              f_real_estate_tax = None,
+                              f_real_estate = f_real_estate, 
+                              f_real_estate_returns = f_real_estate_returns, 
+                              f_real_estate_tax = f_real_estate_tax,
                               
                               r_inflation = None,
                               r_salary = r_salary, r_salary_increase = r_salary_increase, 
-                              r_extra_income = 0, r_extra_income_increase = 0,
+                              r_extra_income = r_extra_income, 
+                              r_extra_income_increase = r_extra_income_increase,
                               r_expenses = r_expenses, r_expenses_increase = 0,
                               r_capital = 0, 
                               r_capital_allocation = None, 
