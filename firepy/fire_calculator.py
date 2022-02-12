@@ -277,26 +277,27 @@ self.total_without_real_estate, self.total_with_real_estate)
         crypto = self.crypto * (1+capital_returns[4]/100)**years
         real_estate = self.real_estate * (1+real_estate_returns/100)**years
         capital = stocks + bonds + cash + etfs + crypto
+        
+        if capital > 0:
+            if rebalance == False: 
+                # calculate new allocation:
+                capital_allocation = list(100*np.array([stocks,bonds,cash,etfs,crypto])/capital)
+            else:
+                # get cost (tax) of redistributing:
+                c_v = np.array([stocks,bonds,cash,etfs,crypto]) # value
+                c_a = c_v/capital # allo
+                capital_alloc = (np.array(self.capital_allocation)/100) # desired allocation
+                c_d = c_a - capital_alloc # difference between current and desired allocation
+                cost = 0 
+                for i in range(len(c_a)):
+                    if np.abs(c_d[i]) > 0: # sell / buy part of asset
+                        tmp = (c_v[i]/c_a[i]) * np.abs(c_d[i]) 
+                        cost = cost + tmp*(self.capital_tax[i]/100) # add to tax cost
     
-        if rebalance == False: 
-            # calculate new allocation:
-            capital_allocation = list(100*np.array([stocks,bonds,cash,etfs,crypto])/capital)
-        else:
-            # get cost (tax) of redistributing:
-            c_v = np.array([stocks,bonds,cash,etfs,crypto]) # value
-            c_a = c_v/capital # allo
-            capital_alloc = (np.array(self.capital_allocation)/100) # desired allocation
-            c_d = c_a - capital_alloc # difference between current and desired allocation
-            cost = 0 
-            for i in range(len(c_a)):
-                if np.abs(c_d[i]) > 0: # sell / buy part of asset
-                    tmp = (c_v[i]/c_a[i]) * np.abs(c_d[i]) 
-                    cost = cost + tmp*(self.capital_tax[i]/100) # add to tax cost
-
-            capital = capital - cost # update capital to distribute
-            c_v = capital * capital_alloc # allocate capital to assets
-            stocks,bonds,cash,etfs,crypto = list(c_v) # split
-            capital_allocation = list(100*np.array([stocks,bonds,cash,etfs,crypto])/capital)
+                capital = capital - cost # update capital to distribute
+                c_v = capital * capital_alloc # allocate capital to assets
+                stocks,bonds,cash,etfs,crypto = list(c_v) # split
+                capital_allocation = list(100*np.array([stocks,bonds,cash,etfs,crypto])/capital)
             
         return Portfolio(year = self.year + years, capital = capital, aged = True,
                          capital_allocation = capital_allocation, real_estate = real_estate)
@@ -391,11 +392,7 @@ def _get_portfolio_for_year(year = 0, inflation = 3.5,
                           real_estate = 0, 
                           real_estate_returns = 0, 
                           real_estate_tax = 0,
-                          access_usufruct = False,
-                          rebalance = True):
-    
-    capital_year = capital #if (((year == 0) & (portfolio is None))  | access_usufruct) else 0 # only on startup (or when usufruct is accessed) is capital (pre-existing) not bought   
-    real_estate_year = real_estate #if (((year == 0) & (portfolio is None)) | access_usufruct) else 0 # only on startup (or when usufruct is accessed) is real_estate (pre-existing) not bought   
+                          rebalance = True): 
 
     # calulate (capital) investment for year (>0):
     money_in =  salary*(1 + salary_increase/100)**year + extra_income*(1 + extra_income_increase/100)**year  
@@ -411,11 +408,11 @@ def _get_portfolio_for_year(year = 0, inflation = 3.5,
     
     # create new portfolio for year:
     prtfl = Portfolio(year = year, aged = False, 
-                      capital = capital_year,
+                      capital = capital,
                       capital_allocation = capital_allocation,
                       capital_returns = capital_returns,
                       capital_tax = capital_tax,
-                      real_estate = real_estate_year,
+                      real_estate = real_estate,
                       real_estate_returns = real_estate_returns,
                       real_estate_tax = real_estate_tax)
 
@@ -461,7 +458,7 @@ def fire_calculator(age,
                       f_age = 45,
                       r_age = 67,
                       u_age = None, # age at which usufruct drops 
-                      
+                      u_aged = True, # age the value of the usufruc
                       swr = 3.5,
                       rebalance = True,
                       inflation_adjusted_vals = True, 
@@ -556,32 +553,21 @@ def fire_calculator(age,
     fire_number = f_expenses / (swr/100)
     
     if u_age is None: u_age = 1000
-    f_prtfl_u = lambda year, inflation: _get_portfolio_for_year(year = year,
-                                              inflation = inflation,
-                                              salary = 0, 
-                                              salary_increase = 0, 
-                                              extra_income = 0,
-                                              extra_income_increase = 0,
-                                              expenses = 0, 
-                                              expenses_increase = 0,
-                                  
-                                              portfolio = prtfl,
-                                              capital = u_capital, 
-                                              capital_allocation = u_capital_allocation, 
-                                              capital_returns = u_capital_returns,
-                                              capital_tax = u_capital_tax,
-                                              real_estate = u_real_estate, 
-                                              real_estate_returns = u_real_estate_returns, 
-                                              real_estate_tax = u_real_estate_tax,
-                                              access_usufruct = True,
-                                              rebalance = rebalance)
+    f_prtfl_u = lambda year:  Portfolio(year = year, aged = False, 
+                                        capital = u_capital,
+                                        capital_allocation = u_capital_allocation,
+                                        capital_returns = u_capital_returns,
+                                        capital_tax = u_capital_tax,
+                                        real_estate = u_real_estate,
+                                        real_estate_returns = u_real_estate_returns,
+                                        real_estate_tax = u_real_estate_tax)
     prtfls = []
     bankrupt_without_re = False
     bankrupt_with_re = False
     fire_without_re = False
     fire_with_re = False
     for year in range(int(years + 1)):
-        
+
         if year == 0:
             prtfl = None
             infl_cmpnd = 1
@@ -606,12 +592,16 @@ def fire_calculator(age,
                                               real_estate = pf_real_estate, 
                                               real_estate_returns = pf_real_estate_returns, 
                                               real_estate_tax = pf_real_estate_tax,
-                                              access_usufruct = False,
                                               rebalance = rebalance)
               pf_real_estate = 0 # buy real_estate only once !
               pf_capital = 0
+              
               if age + year == u_age:
-                  prtfl = prtfl + f_prtfl_u(year, inflation)
+                  prtfl_u = f_prtfl_u(year)
+                  if u_aged:
+                      prtfl_u = prtfl_u.get_aged(year, rebalance = rebalance)
+                      prtfl_u.year = year
+                  prtfl = prtfl + prtfl_u
                   
         # fire period:
         if (age + year >= f_age) & (age + year < r_age):
@@ -634,12 +624,17 @@ def fire_calculator(age,
                                               real_estate = f_real_estate, 
                                               real_estate_returns = f_real_estate_returns, 
                                               real_estate_tax = f_real_estate_tax,
-                                              access_usufruct = False,
                                               rebalance = rebalance)
               f_real_estate = 0 # buy real_estate only once !
               f_capital = 0
+              
               if age + year == u_age:
-                  prtfl = prtfl + f_prtfl_u(year, inflation)
+                  prtfl_u = f_prtfl_u(year)
+                  if u_aged:
+                      prtfl_u = prtfl_u.get_aged(year, rebalance = rebalance)
+                      prtfl_u.year = year
+                  prtfl = prtfl + prtfl_u
+
                   
         # retirement period:
         if (age + year >= r_age):
@@ -661,12 +656,16 @@ def fire_calculator(age,
                                               real_estate = r_real_estate, 
                                               real_estate_returns = r_real_estate_returns, 
                                               real_estate_tax = r_real_estate_tax,
-                                              access_usufruct = False,
                                               rebalance = rebalance)
               r_real_estate = 0 # buy real_estate only once !
               r_capital = 0
+              
               if age + year == u_age:
-                  prtfl = prtfl + f_prtfl_u(year, inflation)
+                  prtfl_u = f_prtfl_u(year)
+                  if u_aged:
+                      prtfl_u = prtfl_u.get_aged(year, rebalance = rebalance)
+                      prtfl_u.year = year
+                  prtfl = prtfl + prtfl_u
                   
         if inflation_adjusted_vals: 
             prtfl_inflation_adjusted = prtfl.get_scaled(scale = (1/((1+inflation/100)**year)), capital_only=False) 
@@ -734,54 +733,54 @@ def fire_calculator(age,
 
 if __name__ == '__main__': 
     
-    run_fire_calculator_ = False
+    # run_fire_calculator_ = False
     run_fire_calculator = True 
     
-    if run_fire_calculator_:
-        fire_age = 48 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
-        retirement_income_net = (1610)*12
-        capital_allocation = [60,30,10,0] # stocks, bonds, cash, etf
-        capital_returns = [5,1,0,5]
-        capital_extra_age = None
-        inflation = [2,4,6]
+    # if run_fire_calculator_:
+    #     fire_age = 48 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
+    #     retirement_income_net = (1610)*12
+    #     capital_allocation = [60,30,10,0] # stocks, bonds, cash, etf
+    #     capital_returns = [5,1,0,5]
+    #     capital_extra_age = None
+    #     inflation = [2,4,6]
         
-        pf_capital = 485000
-        pf_real_estate = 0
-        pf_real_estate_returns = 1
-        pf_extra_income = 0
-        pf_extra_income_increase = 1
-        f_extra_income = pf_extra_income
-        f_extra_income_increase = pf_extra_income_increase
-        r_extra_income = pf_extra_income
-        r_extra_income_increase = pf_extra_income_increase
+    #     pf_capital = 485000
+    #     pf_real_estate = 0
+    #     pf_real_estate_returns = 1
+    #     pf_extra_income = 0
+    #     pf_extra_income_increase = 1
+    #     f_extra_income = pf_extra_income
+    #     f_extra_income_increase = pf_extra_income_increase
+    #     r_extra_income = pf_extra_income
+    #     r_extra_income_increase = pf_extra_income_increase
         
         
-        fig, ax = plt.subplots(1,len(inflation), figsize=(19,5))
+    #     fig, ax = plt.subplots(1,len(inflation), figsize=(19,5))
         
-        for i, inflation_i in enumerate(inflation):
-            print('\ninflation = {:1.0f}%:'.format(inflation_i))
-            ax[i].set_title('Inflation = {:1.0f}%:'.format(inflation_i))
-            portfolio0 = fire_calculator_(fire_age = fire_age, 
-                                          pf_capital = pf_capital,
-                                         retirement_income_net = retirement_income_net,
-                                         capital_allocation = capital_allocation,
-                                         capital_returns = capital_returns,
-                                         capital_extra_age = capital_extra_age,
-                                         inflation = inflation_i, ax = ax[i], 
+    #     for i, inflation_i in enumerate(inflation):
+    #         print('\ninflation = {:1.0f}%:'.format(inflation_i))
+    #         ax[i].set_title('Inflation = {:1.0f}%:'.format(inflation_i))
+    #         portfolio0 = fire_calculator_(fire_age = fire_age, 
+    #                                       pf_capital = pf_capital,
+    #                                      retirement_income_net = retirement_income_net,
+    #                                      capital_allocation = capital_allocation,
+    #                                      capital_returns = capital_returns,
+    #                                      capital_extra_age = capital_extra_age,
+    #                                      inflation = inflation_i, ax = ax[i], 
                                         
-                                        pf_real_estate = pf_real_estate,
-                                        pf_real_estate_returns = pf_real_estate_returns,
-                                        f_extra_income = pf_extra_income,
-                                        f_extra_income_increase = pf_extra_income_increase,
-                                        r_extra_income = pf_extra_income,
-                                        r_extra_income_increase = pf_extra_income_increase)
+    #                                     pf_real_estate = pf_real_estate,
+    #                                     pf_real_estate_returns = pf_real_estate_returns,
+    #                                     f_extra_income = pf_extra_income,
+    #                                     f_extra_income_increase = pf_extra_income_increase,
+    #                                     r_extra_income = pf_extra_income,
+    #                                     r_extra_income_increase = pf_extra_income_increase)
         
         
         
     if run_fire_calculator:
         with_real_estate = 1
         age = 45 # 45: 1457, 46: 1542, 47:1614, 48: 1684, 49: 1742 50: 1813; + 170 euro studiejaren
-        f_age = 49
+        f_age = 48
         u_age = None
         swr = 3.5
         rebalance = True
@@ -789,13 +788,13 @@ if __name__ == '__main__':
         pf_inflation = [2,4,6,3.5]
         pf_salary = 40000
         pf_salary_increase = 1
-        pf_expenses = 16000
-        pf_capital = 485000 
+        pf_expenses = 14000
+        pf_capital = 520000 
         pf_real_estate = 0
-        f_expenses = 20000
+        f_expenses = 18000
         r_salary = (1610+170)*12 # + 170 for study years
         r_salary_increase = None
-        r_expenses = 20000
+        r_expenses = 18000
         
         # pf_real_estate = 550000 * with_real_estate
         # pf_real_estate_returns = 1
@@ -820,7 +819,10 @@ if __name__ == '__main__':
         f_extra_income = 4500 * with_real_estate
         f_extra_income_increase = 1
         r_extra_income = f_extra_income
-        r_extra_income_increase = f_extra_income_increase
+        r_extra_income_increase = f_extra_income_increase 
+        
+        u_capital = 333000
+        u_real_estate = 400000
         
         fig, ax = plt.subplots(1,len(pf_inflation), sharex = True, sharey = True, 
                                figsize = (19,5))
@@ -847,7 +849,7 @@ if __name__ == '__main__':
                               pf_expenses = pf_expenses, pf_expenses_increase = 0,
                               pf_capital = pf_capital, 
                               pf_capital_allocation = [60, 30, 10, 0, 0], 
-                              pf_capital_returns = [5,1,0,5,0],
+                              pf_capital_returns = [8,1,0,5,0],
                               pf_capital_tax = [0.35, 0.12, 0, 1.32 + 0.22, 0],
                               pf_real_estate = pf_real_estate, 
                               pf_real_estate_returns = pf_real_estate_returns, 
@@ -879,7 +881,7 @@ if __name__ == '__main__':
                               r_real_estate_returns = None, 
                               r_real_estate_tax = None,
                               
-                              u_capital = 0, 
+                              u_capital = u_capital, 
                               u_capital_allocation = None, 
                               u_capital_returns = None,
                               u_capital_tax = None,
